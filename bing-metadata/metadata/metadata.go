@@ -1,8 +1,12 @@
 package metadata
 
-import "strings"
+import (
+	"archive/zip"
+	"encoding/xml"
+	"strings"
+)
 
-type OfficeCodeProperty struct {
+type OfficeCoreProperty struct {
 	XMLName        string `xml:"coreProperties"`
 	Creator        string `xml:"creator"`
 	LastModifiedBy string `xml:"lastModifiedBy"`
@@ -32,4 +36,36 @@ func (appProperty *OfficeAppProperty) GetMajorVersion() string {
 		return version
 	}
 	return "Unknown"
+}
+
+func NewProperties(reader *zip.Reader) (*OfficeCoreProperty, *OfficeAppProperty, error) {
+	var coreProperty OfficeCoreProperty
+	var appProperty OfficeAppProperty
+	for _, file := range reader.File {
+		switch file.Name {
+		case "docProps/core.xml":
+			if err := process(file, &coreProperty); err != nil {
+				return nil, nil, err
+			}
+		case "docProps/app.xml":
+			if err := process(file, &appProperty); err != nil {
+				return nil, nil, err
+			}
+		default:
+			continue
+		}
+	}
+	return &coreProperty, &appProperty, nil
+}
+
+func process(file *zip.File, prop interface{}) error {
+	rc, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	if err := xml.NewDecoder(rc).Decode(&prop); err != nil {
+		return err
+	}
+	return nil
 }
